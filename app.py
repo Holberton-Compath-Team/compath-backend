@@ -1,3 +1,4 @@
+from flask_swagger_ui import get_swaggerui_blueprint
 from flask import Flask, request, jsonify
 from flask_mysqldb import MySQL
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -8,7 +9,18 @@ import os
 load_dotenv()
 
 app = Flask(__name__)
+# --- SWAGGER UI KONFİQURASİYASI ---
+SWAGGER_URL = '/api/docs'
+API_URL = '/static/swagger.json'
 
+swaggerui_blueprint = get_swaggerui_blueprint(
+    SWAGGER_URL,
+    API_URL,
+    config={'app_name': "COMPATH API Docs"}
+)
+
+app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
+# ----------------------------------
 # MySQL Konfiqurasiyası
 app.config['MYSQL_HOST'] = os.getenv('DB_HOST')
 app.config['MYSQL_USER'] = os.getenv('DB_USER')
