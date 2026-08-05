@@ -1,0 +1,84 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "COMPATH API Documentation",
+    "description": "COMPATH layihəsi üçün Login və Signup API sənədləşdirilməsi",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/login": {
+      "post": {
+        "summary": "İstifadəçi girişi (Login)",
+        "description": "Email və şifrə ilə sistemə daxil olmaq üçün endpoint",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "example": "user@compath.az"
+                  },
+                  "password": {
+                    "type": "string",
+                    "example": "123456"
+                  }
+                },
+                "required": ["email", "password"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Uğurlu giriş"
+          },
+          "401": {
+            "description": "Məlumatlar yanlışdır"
+          }
+        }
+      }
+    },
+    "/api/signup": {
+      "post": {
+        "summary": "Yeni istifadəçi qeydiyyatı (Signup)",
+        "description": "Sistemdə yeni hesab yaratmaq üçün endpoint",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {
+                    "type": "string",
+                    "example": "johndoe"
+                  },
+                  "email": {
+                    "type": "string",
+                    "example": "user@compath.az"
+                  },
+                  "password": {
+                    "type": "string",
+                    "example": "123456"
+                  }
+                },
+                "required": ["username", "email", "password"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "İstifadəçi uğurla yaradıldı"
+          },
+          "400": {
+            "description": "Yanlış və ya əskik məlumat"
+          }
+        }
+      }
+    }
+  }
+}
