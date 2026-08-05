@@ -3,11 +3,13 @@ from flask_mysqldb import MySQL
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 import os
+from flask_cors import CORS
 
 # .env faylındakı məlumatları yükləyirik
 load_dotenv()
 
 app = Flask(__name__)
+CORS(app)
 
 # MySQL Konfiqurasiyası
 app.config['MYSQL_HOST'] = os.getenv('DB_HOST')
