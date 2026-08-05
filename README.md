@@ -45,10 +45,3 @@ CREATE TABLE users (
 python app.py
 ```
 Server `http://127.0.0.1:5000` ünvanında işə düşəcək.
-
----
-
-## 📡 API Endpoint-lər
-*Backend komandası yaxın zamanda bura Swagger/OpenAPI sənədləşdirməsi əlavə edəcək.*
-- **POST `/api/signup`** - Yeni istifadəçi qeydiyyatı
-- **POST `/api/login`** - Mövcud istifadəçi girişi
