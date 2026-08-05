@@ -4,6 +4,7 @@ from flask_mysqldb import MySQL
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 import os
+from flask_cors import CORS
 
 # .env faylındakı məlumatları yükləyirik
 load_dotenv()
@@ -12,6 +13,7 @@ app = Flask(__name__)
 # --- SWAGGER UI KONFİQURASİYASI ---
 SWAGGER_URL = '/api/docs'
 API_URL = '/static/swagger.json'
+CORS(app)
 
 swaggerui_blueprint = get_swaggerui_blueprint(
     SWAGGER_URL,
