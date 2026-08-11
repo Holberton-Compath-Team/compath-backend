@@ -2,14 +2,13 @@
   "openapi": "3.0.0",
   "info": {
     "title": "COMPATH API Documentation",
-    "description": "COMPATH layihəsi üçün Login və Signup API sənədləşdirilməsi",
-    "version": "1.0.0"
+    "description": "COMPATH layihəsi üçün Auth və Tickets CRUD API sənədləşdirilməsi",
+    "version": "1.1.0"
   },
   "paths": {
     "/api/login": {
       "post": {
         "summary": "İstifadəçi girişi (Login)",
-        "description": "Email və şifrə ilə sistemə daxil olmaq üçün endpoint",
         "requestBody": {
           "required": true,
           "content": {
@@ -17,14 +16,8 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "email": {
-                    "type": "string",
-                    "example": "user@compath.az"
-                  },
-                  "password": {
-                    "type": "string",
-                    "example": "123456"
-                  }
+                  "email": { "type": "string", "example": "user@compath.az" },
+                  "password": { "type": "string", "example": "123456" }
                 },
                 "required": ["email", "password"]
               }
@@ -32,19 +25,14 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "Uğurlu giriş"
-          },
-          "401": {
-            "description": "Məlumatlar yanlışdır"
-          }
+          "200": { "description": "Uğurlu giriş" },
+          "401": { "description": "Məlumatlar yanlışdır" }
         }
       }
     },
     "/api/signup": {
       "post": {
         "summary": "Yeni istifadəçi qeydiyyatı (Signup)",
-        "description": "Sistemdə yeni hesab yaratmaq üçün endpoint",
         "requestBody": {
           "required": true,
           "content": {
@@ -52,18 +40,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "username": {
-                    "type": "string",
-                    "example": "johndoe"
-                  },
-                  "email": {
-                    "type": "string",
-                    "example": "user@compath.az"
-                  },
-                  "password": {
-                    "type": "string",
-                    "example": "123456"
-                  }
+                  "username": { "type": "string", "example": "johndoe" },
+                  "email": { "type": "string", "example": "user@compath.az" },
+                  "password": { "type": "string", "example": "123456" }
                 },
                 "required": ["username", "email", "password"]
               }
@@ -71,12 +50,59 @@
           }
         },
         "responses": {
-          "201": {
-            "description": "İstifadəçi uğurla yaradıldı"
-          },
-          "400": {
-            "description": "Yanlış və ya əskik məlumat"
+          "201": { "description": "İstifadəçi uğurla yaradıldı" },
+          "400": { "description": "Yanlış və ya əskik məlumat" }
+        }
+      }
+    },
+    "/api/tickets/{ticket_id}": {
+      "put": {
+        "summary": "Şikayətin statusunu yeniləmək (Update)",
+        "parameters": [
+          {
+            "name": "ticket_id",
+            "in": "path",
+            "required": true,
+            "description": "Yenilənəcək şikayətin ID-si",
+            "schema": { "type": "integer", "example": 1 }
           }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": { "type": "string", "example": "Həll olundu" }
+                },
+                "required": ["status"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Status uğurla yeniləndi" },
+          "400": { "description": "Status parametri boşdur və ya çatışmır" },
+          "404": { "description": "Bu ID-yə uyğun şikayət tapılmadı" },
+          "500": { "description": "Server xətası" }
+        }
+      },
+      "delete": {
+        "summary": "Şikayəti silmək (Delete)",
+        "parameters": [
+          {
+            "name": "ticket_id",
+            "in": "path",
+            "required": true,
+            "description": "Silinəcək şikayətin ID-si",
+            "schema": { "type": "integer", "example": 1 }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Şikayət uğurla silindi" },
+          "404": { "description": "Bu ID-yə uyğun şikayət tapılmadı" },
+          "500": { "description": "Server xətası" }
         }
       }
     }
