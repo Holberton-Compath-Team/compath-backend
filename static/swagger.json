@@ -5,6 +5,15 @@
     "description": "COMPATH layihəsi üçün Auth və Tickets CRUD API sənədləşdirilməsi",
     "version": "1.1.0"
   },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
   "paths": {
     "/api/login": {
       "post": {
@@ -25,7 +34,8 @@
           }
         },
         "responses": {
-          "200": { "description": "Uğurlu giriş" },
+          "200": { "description": "Uğurlu giriş (Token qaytarılır)" },
+          "400": { "description": "E-poçt və şifrə daxil edilməlidir" },
           "401": { "description": "Məlumatlar yanlışdır" }
         }
       }
@@ -40,24 +50,67 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "username": { "type": "string", "example": "johndoe" },
+                  "fullname": { "type": "string", "example": "Təqdimat Test" },
                   "email": { "type": "string", "example": "user@compath.az" },
                   "password": { "type": "string", "example": "123456" }
                 },
-                "required": ["username", "email", "password"]
+                "required": ["fullname", "email", "password"]
               }
             }
           }
         },
         "responses": {
           "201": { "description": "İstifadəçi uğurla yaradıldı" },
-          "400": { "description": "Yanlış və ya əskik məlumat" }
+          "400": { "description": "Bütün sahələr doldurulmalıdır" },
+          "409": { "description": "Bu e-poçt artıq qeydiyyatdan keçib" }
+        }
+      }
+    },
+    "/api/tickets": {
+      "post": {
+        "summary": "Yeni şikayət yaratmaq (Create)",
+        "security": [
+          { "BearerAuth": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string", "example": "Kompüter problemi" },
+                  "description": { "type": "string", "example": "Laboratoriyada kompüter açılmır" },
+                  "department": { "type": "string", "example": "IT Dəstək" }
+                },
+                "required": ["title", "description", "department"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Şikayətiniz uğurla göndərildi" },
+          "400": { "description": "Bütün sahələr doldurulmalıdır" },
+          "401": { "description": "İcazə rədd edildi! Token yoxdur və ya etibarsızdır" }
+        }
+      },
+      "get": {
+        "summary": "İstifadəçinin şikayətlərinə baxması (Read)",
+        "security": [
+          { "BearerAuth": [] }
+        ],
+        "responses": {
+          "200": { "description": "Şikayətlərin siyahısı uğurla gətirildi" },
+          "401": { "description": "İcazə rədd edildi! Token yoxdur və ya etibarsızdır" }
         }
       }
     },
     "/api/tickets/{ticket_id}": {
       "put": {
         "summary": "Şikayətin statusunu yeniləmək (Update)",
+        "security": [
+          { "BearerAuth": [] }
+        ],
         "parameters": [
           {
             "name": "ticket_id",
@@ -84,12 +137,14 @@
         "responses": {
           "200": { "description": "Status uğurla yeniləndi" },
           "400": { "description": "Status parametri boşdur və ya çatışmır" },
-          "404": { "description": "Bu ID-yə uyğun şikayət tapılmadı" },
-          "500": { "description": "Server xətası" }
+          "404": { "description": "Bu ID-yə uyğun şikayət tapılmadı" }
         }
       },
       "delete": {
         "summary": "Şikayəti silmək (Delete)",
+        "security": [
+          { "BearerAuth": [] }
+        ],
         "parameters": [
           {
             "name": "ticket_id",
@@ -101,8 +156,7 @@
         ],
         "responses": {
           "200": { "description": "Şikayət uğurla silindi" },
-          "404": { "description": "Bu ID-yə uyğun şikayət tapılmadı" },
-          "500": { "description": "Server xətası" }
+          "404": { "description": "Bu ID-yə uyğun şikayət tapılmadı" }
         }
       }
     }
