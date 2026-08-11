@@ -128,6 +128,72 @@ def login():
         return jsonify({"error": "E-poçt və ya şifrə yanlışdır!"}), 401
 
 # ==========================================
+# 1. TICKET YENİLƏMƏK (PUT /api/tickets/<id>)
+# ==========================================
+@app.route('/api/tickets/<int:ticket_id>', methods=['PUT'])
+def update_ticket(ticket_id):
+    data = request.get_json()
+
+    # 1. Məlumatın mövcudluğunu yoxla (Error Handling - 400 Bad Request)
+    if not data or 'status' not in data or not str(data['status']).strip():
+        return jsonify({"error": "Status mütləq daxil edilməlidir və boş ola bilməz"}), 400
+
+    new_status = data['status'].strip()
+
+    try:
+        cur = mysql.connection.cursor()
+
+        # 2. Şikayətin bazada olub-olmadığını yoxla (404 Not Found)
+        cur.execute("SELECT id FROM tickets WHERE id = %s", (ticket_id,))
+        ticket = cur.fetchone()
+
+        if not ticket:
+            cur.close()
+            return jsonify({"error": f"{ticket_id} nömrəli şikayət tapılmadı"}), 404
+
+        # 3. Şikayətin statusunu yenilə
+        cur.execute("UPDATE tickets SET status = %s WHERE id = %s", (new_status, ticket_id))
+        mysql.connection.commit()
+        cur.close()
+
+        return jsonify({
+            "message": "Şikayətin statusu uğurla yeniləndi",
+            "ticket_id": ticket_id,
+            "new_status": new_status
+        }), 200
+
+    except Exception as e:
+        # Baza və ya server xətalarını tutmaq (500 Internal Server Error)
+        return jsonify({"error": f"Server xətası baş verdi: {str(e)}"}), 500
+
+
+# ==========================================
+# 2. TICKET SİLMƏK (DELETE /api/tickets/<id>)
+# ==========================================
+@app.route('/api/tickets/<int:ticket_id>', methods=['DELETE'])
+def delete_ticket(ticket_id):
+    try:
+        cur = mysql.connection.cursor()
+
+        # 1. Şikayətin bazada olub-olmadığını yoxla (404 Not Found)
+        cur.execute("SELECT id FROM tickets WHERE id = %s", (ticket_id,))
+        ticket = cur.fetchone()
+
+        if not ticket:
+            cur.close()
+            return jsonify({"error": f"{ticket_id} nömrəli şikayət tapılmadı"}), 404
+
+        # 2. Şikayəti bazadan sil
+        cur.execute("DELETE FROM tickets WHERE id = %s", (ticket_id,))
+        mysql.connection.commit()
+        cur.close()
+
+        return jsonify({
+            "message": f"{ticket_id} nömrəli şikayət uğurla silindi"
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": f"Server xətası baş verdi: {str(e)}"}), 500
 # SPRINT 2 - TƏLƏBƏ ŞİKAYƏTLƏRİ (TICKETS)
 # ==========================================
 
