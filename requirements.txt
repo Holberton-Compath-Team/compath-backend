@@ -1,0 +1,7 @@
+flask
+flask-mysqldb
+flask-cors
+flask-swagger-ui
+pyjwt
+python-dotenv
+werkzeug
