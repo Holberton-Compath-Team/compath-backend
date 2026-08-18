@@ -49,7 +49,9 @@ def token_required(f):
             
         return f(current_user, *args, **kwargs)
     return decorated
-
+# Admin rolunu yoxlayan köməkçi funksiya
+def is_admin(current_user):
+    return current_user.get('role') == 'admin'
 # 2. Yalnız Admin Yoxlaması
 def admin_required(f):
     @wraps(f)
@@ -241,6 +243,39 @@ def get_services():
     cursor.close()
     
     return jsonify(services), 200
+# 2. Yeni xidmət əlavə etmək (Yalnız Admin üçün)
+@app.route('/api/services', methods=['POST'])
+@admin_required
+def create_service(current_user):
+    data = request.get_json()
+    name = data.get('name')
+    description = data.get('description')
 
+    if not name or not description:
+        return jsonify({'error': 'Xidmət adı və təsviri daxil edilməlidir'}), 400
+
+    cursor = mysql.connection.cursor()
+    cursor.execute("INSERT INTO services (name, description) VALUES (%s, %s)", (name, description))
+    mysql.connection.commit()
+    service_id = cursor.lastrowid
+    cursor.close()
+
+    return jsonify({'message': 'Xidmət uğurla yaradıldı', 'id': service_id}), 201
+
+
+# 3. Xidməti silmək (Yalnız Admin üçün)
+@app.route('/api/services/<int:service_id>', methods=['DELETE'])
+@admin_required
+def delete_service(current_user, service_id):
+    cursor = mysql.connection.cursor()
+    cursor.execute("DELETE FROM services WHERE id = %s", (service_id,))
+    mysql.connection.commit()
+
+    if cursor.rowcount == 0:
+        cursor.close()
+        return jsonify({'error': 'Xidmət tapılmadı'}), 404
+
+    cursor.close()
+    return jsonify({'message': 'Xidmət uğurla silindi'}), 200
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
