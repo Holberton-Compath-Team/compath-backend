@@ -1,76 +1,81 @@
-from flask_swagger_ui import get_swaggerui_blueprint
-from flask import Flask, request, jsonify
-from flask_mysqldb import MySQL
-from werkzeug.security import generate_password_hash, check_password_hash
-from dotenv import load_dotenv
 import os
-from flask_cors import CORS
-# Yeni əlavə olunan kitabxanalar (JWT üçün)
-import jwt
 import datetime
 from functools import wraps
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from flask_mysqldb import MySQL
+import MySQLdb.cursors
+from werkzeug.security import generate_password_hash, check_password_hash
+import jwt
+from dotenv import load_dotenv
 
-# .env faylındakı məlumatları yükləyirik
+# Mühit dəyişənlərini (.env) yükləyirik
 load_dotenv()
 
 app = Flask(__name__)
-# --- SWAGGER UI KONFİQURASİYASI ---
-SWAGGER_URL = '/api/docs'
-API_URL = '/static/swagger.json'
 CORS(app)
 
-swaggerui_blueprint = get_swaggerui_blueprint(
-    SWAGGER_URL,
-    API_URL,
-    config={'app_name': "COMPATH API Docs"}
-)
+# Təhlükəsizlik açarı
+app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'CompathKey2026')
 
-app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
-# ----------------------------------
-
-# MySQL və JWT Konfiqurasiyası
-app.config['MYSQL_HOST'] = os.getenv('DB_HOST')
-app.config['MYSQL_USER'] = os.getenv('DB_USER')
-app.config['MYSQL_PASSWORD'] = os.getenv('DB_PASSWORD')
-app.config['MYSQL_DB'] = os.getenv('DB_NAME')
-app.config['MYSQL_CURSORCLASS'] = 'DictCursor' 
-app.config['SECRET_KEY'] = os.getenv('JWT_SECRET_KEY') # Token üçün gizli açarımız
+# Verilənlər Bazası Konfiqurasiyası
+app.config['MYSQL_HOST'] = os.getenv('DB_HOST', 'localhost')
+app.config['MYSQL_USER'] = os.getenv('DB_USER', 'root')
+app.config['MYSQL_PASSWORD'] = os.getenv('DB_PASSWORD', '')
+app.config['MYSQL_DB'] = os.getenv('DB_NAME', 'compath_db')
 
 mysql = MySQL(app)
 
 # ==========================================
-# JWT MÜHAFİZƏÇİSİ (DECORATOR)
+# 🛡️ QORUYUCU FUNKSİYALAR (DECORATORS)
 # ==========================================
+
+# 1. Ümumi Token Yoxlaması (Həm tələbə, həm admin üçündür)
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         token = None
-        # Token Authorization header-ində 'Bearer <token>' kimi göndərilməlidir
         if 'Authorization' in request.headers:
             token = request.headers['Authorization'].split(" ")[1]
         
         if not token:
-            return jsonify({'error': 'İcazə rədd edildi! Token göndərilməyib.'}), 401
-        
-        try:
-            # Token-i açırıq və içindən user_id-ni götürürük
-            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
-            current_user_id = data['user_id']
-        except:
-            return jsonify({'error': 'Token etibarsızdır və ya vaxtı bitib!'}), 401
+            return jsonify({'error': 'Token tapılmadı!'}), 401
             
-        return f(current_user_id, *args, **kwargs)
+        try:
+            data = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=["HS256"])
+            current_user = data
+        except Exception as e:
+            return jsonify({'error': 'Etibarsız və ya vaxtı bitmiş token!'}), 401
+            
+        return f(current_user, *args, **kwargs)
+    return decorated
+
+# 2. Yalnız Admin Yoxlaması
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        if 'Authorization' in request.headers:
+            token = request.headers['Authorization'].split(" ")[1]
+        
+        if not token:
+            return jsonify({'error': 'Token tapılmadı!'}), 401
+            
+        try:
+            data = jwt.decode(token, app.config['JWT_SECRET_KEY'], algorithms=["HS256"])
+            if data.get('role') != 'admin':
+                return jsonify({'error': 'İcazə rədd edildi! Bu əməliyyat yalnız Adminlər üçündür.'}), 403
+            current_user = data
+        except Exception as e:
+            return jsonify({'error': 'Etibarsız token!'}), 401
+            
+        return f(current_user, *args, **kwargs)
     return decorated
 
 # ==========================================
-# API ENDPOINT-LƏR
+# 🔑 AUTENTİFİKASİYA API-ləri
 # ==========================================
 
-@app.route('/', methods=['GET'])
-def home():
-    return jsonify({"message": "COMPATH Backend API is running with MySQL!"}), 200
-
-# SIGN UP API
 @app.route('/api/signup', methods=['POST'])
 def signup():
     data = request.get_json()
@@ -79,24 +84,25 @@ def signup():
     password = data.get('password')
 
     if not fullname or not email or not password:
-        return jsonify({"error": "Bütün sahələr doldurulmalıdır!"}), 400
-
-    cursor = mysql.connection.cursor()
-    cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
-    existing_user = cursor.fetchone()
-    
-    if existing_user:
-        cursor.close()
-        return jsonify({"error": "Bu e-poçt artıq qeydiyyatdan keçib!"}), 409
+        return jsonify({'error': 'Məlumatlar əskikdir'}), 400
 
     hashed_password = generate_password_hash(password)
-    cursor.execute("INSERT INTO users (fullname, email, password) VALUES (%s, %s, %s)", (fullname, email, hashed_password))
+
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+    if cursor.fetchone():
+        return jsonify({'error': 'Bu email artıq mövcuddur'}), 409
+
+    cursor.execute(
+        "INSERT INTO users (fullname, email, password, role) VALUES (%s, %s, %s, 'student')",
+        (fullname, email, hashed_password)
+    )
     mysql.connection.commit()
     cursor.close()
 
-    return jsonify({"status": "success", "message": "Uğurla qeydiyyatdan keçdiniz!"}), 201
+    return jsonify({'message': 'Qeydiyyat uğurla tamamlandı'}), 201
 
-# LOGIN API (Yeniləndi - Artıq Token qaytarır)
+
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json()
@@ -104,132 +110,137 @@ def login():
     password = data.get('password')
 
     if not email or not password:
-        return jsonify({"error": "E-poçt və şifrə daxil edilməlidir!"}), 400
+        return jsonify({'error': 'Email və şifrə daxil edilməlidir'}), 400
 
-    cursor = mysql.connection.cursor()
-    cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("SELECT id, fullname, email, password, role FROM users WHERE email = %s", (email,))
     user = cursor.fetchone()
     cursor.close()
 
-    if user and check_password_hash(user['password'], password):
-        # Şifrə düzgündürsə, 24 saatlıq Token yaradırıq:
-        token = jwt.encode({
-            'user_id': user['id'],
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=1)
-        }, app.config['SECRET_KEY'], algorithm="HS256")
+    if not user or not check_password_hash(user['password'], password):
+        return jsonify({'error': 'Email və ya şifrə yanlışdır'}), 401
 
-        return jsonify({
-            "status": "success", 
-            "message": "Uğurla daxil oldunuz!",
-            "token": token, # Frontend-ə tokeni göndəririk
-            "user": {"id": user['id'], "fullname": user['fullname'], "email": user['email']}
-        }), 200
-    else:
-        return jsonify({"error": "E-poçt və ya şifrə yanlışdır!"}), 401
+    token = jwt.encode({
+        'user_id': user['id'],
+        'role': user['role'],
+        'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+    }, app.config['JWT_SECRET_KEY'], algorithm="HS256")
 
-# ==========================================
-# 1. TICKET YENİLƏMƏK (PUT /api/tickets/<id>)
-# ==========================================
-@app.route('/api/tickets/<int:ticket_id>', methods=['PUT'])
-def update_ticket(ticket_id):
-    data = request.get_json()
-
-    # 1. Məlumatın mövcudluğunu yoxla (Error Handling - 400 Bad Request)
-    if not data or 'status' not in data or not str(data['status']).strip():
-        return jsonify({"error": "Status mütləq daxil edilməlidir və boş ola bilməz"}), 400
-
-    new_status = data['status'].strip()
-
-    try:
-        cur = mysql.connection.cursor()
-
-        # 2. Şikayətin bazada olub-olmadığını yoxla (404 Not Found)
-        cur.execute("SELECT id FROM tickets WHERE id = %s", (ticket_id,))
-        ticket = cur.fetchone()
-
-        if not ticket:
-            cur.close()
-            return jsonify({"error": f"{ticket_id} nömrəli şikayət tapılmadı"}), 404
-
-        # 3. Şikayətin statusunu yenilə
-        cur.execute("UPDATE tickets SET status = %s WHERE id = %s", (new_status, ticket_id))
-        mysql.connection.commit()
-        cur.close()
-
-        return jsonify({
-            "message": "Şikayətin statusu uğurla yeniləndi",
-            "ticket_id": ticket_id,
-            "new_status": new_status
-        }), 200
-
-    except Exception as e:
-        # Baza və ya server xətalarını tutmaq (500 Internal Server Error)
-        return jsonify({"error": f"Server xətası baş verdi: {str(e)}"}), 500
-
+    # Frontend-in istədiyi formatda cavab qaytarırıq
+    return jsonify({
+        'token': token,
+        'user': {
+            'fullname': user['fullname'],
+            'email': user['email'],
+            'role': user['role']
+        }
+    }), 200
 
 # ==========================================
-# 2. TICKET SİLMƏK (DELETE /api/tickets/<id>)
-# ==========================================
-@app.route('/api/tickets/<int:ticket_id>', methods=['DELETE'])
-def delete_ticket(ticket_id):
-    try:
-        cur = mysql.connection.cursor()
-
-        # 1. Şikayətin bazada olub-olmadığını yoxla (404 Not Found)
-        cur.execute("SELECT id FROM tickets WHERE id = %s", (ticket_id,))
-        ticket = cur.fetchone()
-
-        if not ticket:
-            cur.close()
-            return jsonify({"error": f"{ticket_id} nömrəli şikayət tapılmadı"}), 404
-
-        # 2. Şikayəti bazadan sil
-        cur.execute("DELETE FROM tickets WHERE id = %s", (ticket_id,))
-        mysql.connection.commit()
-        cur.close()
-
-        return jsonify({
-            "message": f"{ticket_id} nömrəli şikayət uğurla silindi"
-        }), 200
-
-    except Exception as e:
-        return jsonify({"error": f"Server xətası baş verdi: {str(e)}"}), 500
-# SPRINT 2 - TƏLƏBƏ ŞİKAYƏTLƏRİ (TICKETS)
+# 📋 ŞİKAYƏTLƏR (TICKETS) API-ləri
 # ==========================================
 
-# 1. Yeni şikayət yaratmaq (CREATE)
+# 1. Yeni şikayət yaratmaq (Tələbələr üçün)
 @app.route('/api/tickets', methods=['POST'])
 @token_required
-def create_ticket(current_user_id):
+def create_ticket(current_user):
     data = request.get_json()
-    
     title = data.get('title')
     description = data.get('description')
     department = data.get('department')
-    
-    if not all([title, description, department]):
-        return jsonify({"error": "Bütün sahələr doldurulmalıdır!"}), 400
-        
+
+    if not title or not description or not department:
+        return jsonify({'error': 'Məlumatlar əskikdir'}), 400
+
     cursor = mysql.connection.cursor()
     cursor.execute(
-        "INSERT INTO tickets (user_id, title, description, department) VALUES (%s, %s, %s, %s)", 
-        (current_user_id, title, description, department)
+        "INSERT INTO tickets (user_id, title, description, department, status) VALUES (%s, %s, %s, %s, 'Gözləmədə')",
+        (current_user['user_id'], title, description, department)
     )
     mysql.connection.commit()
     cursor.close()
-    
-    return jsonify({"message": "Şikayətiniz uğurla göndərildi!", "status": "Gözləmədə"}), 201
 
-# 2. Şikayətlərin siyahısına baxmaq (READ)
+    return jsonify({'message': 'Müraciət uğurla yaradıldı'}), 201
+
+# 2. Tələbənin ÖZ şikayətlərinə baxması
 @app.route('/api/tickets', methods=['GET'])
 @token_required
-def get_tickets(current_user_id):
-    cursor = mysql.connection.cursor()
-    cursor.execute("SELECT * FROM tickets WHERE user_id = %s ORDER BY created_at DESC", (current_user_id,))
+def get_my_tickets(current_user):
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("SELECT * FROM tickets WHERE user_id = %s", (current_user['user_id'],))
     tickets = cursor.fetchall()
     cursor.close()
     
     return jsonify(tickets), 200
 
+# 3. BÜTÜN şikayətlərə baxmaq (Yalnız Admin üçün)
+@app.route('/api/tickets/all', methods=['GET'])
+@admin_required
+def get_all_tickets(current_user):
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    query = """
+        SELECT t.id, t.title, t.description, t.department, t.status, t.created_at, 
+               u.fullname, u.email 
+        FROM tickets t
+        JOIN users u ON t.user_id = u.id
+        ORDER BY t.created_at DESC
+    """
+    cursor.execute(query)
+    results = cursor.fetchall()
+    cursor.close()
+
+    # Frontend-in istədiyi nested (iç-içə) JSON formatı
+    formatted_tickets = []
+    for row in results:
+        formatted_tickets.append({
+            "id": row['id'],
+            "title": row['title'],
+            "description": row['description'],
+            "department": row['department'],
+            "status": row['status'],
+            "created_at": row['created_at'],
+            "student": {
+                "fullname": row['fullname'],
+                "email": row['email']
+            }
+        })
+        
+    return jsonify(formatted_tickets), 200
+
+# 4. Şikayətin statusunu dəyişmək (Yalnız Admin üçün)
+@app.route('/api/tickets/<int:ticket_id>', methods=['PUT'])
+@admin_required
+def update_ticket_status(current_user, ticket_id):
+    data = request.get_json()
+    new_status = data.get('status')
+
+    if not new_status:
+        return jsonify({'error': 'Yeni status göndərilməyib'}), 400
+
+    cursor = mysql.connection.cursor()
+    cursor.execute("UPDATE tickets SET status = %s WHERE id = %s", (new_status, ticket_id))
+    mysql.connection.commit()
+    
+    if cursor.rowcount == 0:
+        cursor.close()
+        return jsonify({'error': 'Şikayət tapılmadı'}), 404
+        
+    cursor.close()
+    return jsonify({'message': 'Status uğurla yeniləndi'}), 200
+
+# ==========================================
+# 🏢 XİDMƏT KATALOQU (SERVICES) API-ləri
+# ==========================================
+
+# Bütün xidmətləri gətirmək (Hər kəs görə bilər)
+@app.route('/api/services', methods=['GET'])
+def get_services():
+    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+    cursor.execute("SELECT id, name, description, created_at FROM services")
+    services = cursor.fetchall()
+    cursor.close()
+    
+    return jsonify(services), 200
+
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, port=5000)
