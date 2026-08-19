@@ -8,12 +8,25 @@ import MySQLdb.cursors
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 from dotenv import load_dotenv
+from flask_swagger_ui import get_swaggerui_blueprint
 
 # Mühit dəyişənlərini (.env) yükləyirik
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
+
+# ==========================================
+# 📚 SWAGGER SƏNƏDLƏŞMƏSİ (DOCS)
+# ==========================================
+SWAGGER_URL = '/api/docs'
+API_URL = '/static/swagger.json'
+swaggerui_blueprint = get_swaggerui_blueprint(
+    SWAGGER_URL,
+    API_URL,
+    config={'app_name': "COMPATH API Docs"}
+)
+app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
 
 # Təhlükəsizlik açarı
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'CompathKey2026')
@@ -130,7 +143,6 @@ def login():
         'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
     }, app.config['JWT_SECRET_KEY'], algorithm="HS256")
 
-    # Frontend-in istədiyi formatda cavab qaytarırıq (id sahəsi əlavə edilib)
     return jsonify({
         'token': token,
         'user': {
@@ -194,7 +206,6 @@ def get_all_tickets(current_user):
     results = cursor.fetchall()
     cursor.close()
 
-    # Frontend-in istədiyi nested (iç-içə) JSON formatı
     formatted_tickets = []
     for row in results:
         formatted_tickets.append({
