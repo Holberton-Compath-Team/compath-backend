@@ -49,9 +49,11 @@ def token_required(f):
             
         return f(current_user, *args, **kwargs)
     return decorated
+
 # Admin rolunu yoxlayan köməkçi funksiya
 def is_admin(current_user):
     return current_user.get('role') == 'admin'
+
 # 2. Yalnız Admin Yoxlaması
 def admin_required(f):
     @wraps(f)
@@ -128,10 +130,11 @@ def login():
         'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
     }, app.config['JWT_SECRET_KEY'], algorithm="HS256")
 
-    # Frontend-in istədiyi formatda cavab qaytarırıq
+    # Frontend-in istədiyi formatda cavab qaytarırıq (id sahəsi əlavə edilib)
     return jsonify({
         'token': token,
         'user': {
+            'id': user['id'],
             'fullname': user['fullname'],
             'email': user['email'],
             'role': user['role']
@@ -234,7 +237,7 @@ def update_ticket_status(current_user, ticket_id):
 # 🏢 XİDMƏT KATALOQU (SERVICES) API-ləri
 # ==========================================
 
-# Bütün xidmətləri gətirmək (Hər kəs görə bilər)
+# 1. Bütün xidmətləri gətirmək (Hər kəs görə bilər)
 @app.route('/api/services', methods=['GET'])
 def get_services():
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -243,6 +246,7 @@ def get_services():
     cursor.close()
     
     return jsonify(services), 200
+
 # 2. Yeni xidmət əlavə etmək (Yalnız Admin üçün)
 @app.route('/api/services', methods=['POST'])
 @admin_required
@@ -277,5 +281,6 @@ def delete_service(current_user, service_id):
 
     cursor.close()
     return jsonify({'message': 'Xidmət uğurla silindi'}), 200
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
