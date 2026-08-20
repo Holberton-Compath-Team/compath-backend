@@ -6,6 +6,7 @@ from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 from dotenv import load_dotenv
+from flask_swagger_ui import get_swaggerui_blueprint
 
 # 🔥 Firebase paketləri
 import firebase_admin
@@ -17,17 +18,28 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
+# ==========================================
+# 📚 SWAGGER SƏNƏDLƏŞMƏSİ (DOCS)
+# ==========================================
+SWAGGER_URL = '/api/docs'
+API_URL = '/static/swagger.json'
+swaggerui_blueprint = get_swaggerui_blueprint(
+    SWAGGER_URL,
+    API_URL,
+    config={'app_name': "COMPATH API Docs"}
+)
+app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
+
 # Təhlükəsizlik açarı
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'CompathKey2026')
 
 # ==========================================
 # 🔥 FİREBASE BAĞLANTISI
 # ==========================================
-# DİQQƏT: Yüklədiyiniz .json faylının əsl adını bura qeyd edin!
 cred = credentials.Certificate("compath-ee7c5-firebase-adminsdk-fbsvc-85b5ad0528.json")
 firebase_admin.initialize_app(cred)
 
-# Verilənlər bazasına referans (Bundan sonra 'mysql.connection' əvəzinə 'db' işlədirik)
+# Verilənlər bazasına referans
 db = firestore.client()
 
 # ==========================================
@@ -53,6 +65,10 @@ def token_required(f):
             
         return f(current_user, *args, **kwargs)
     return decorated
+
+# Admin rolunu yoxlayan köməkçi funksiya
+def is_admin(current_user):
+    return current_user.get('role') == 'admin'
 
 # 2. Yalnız Admin Yoxlaması
 def admin_required(f):
@@ -132,7 +148,6 @@ def login():
     if not check_password_hash(user_data['password'], password):
         return jsonify({'error': 'Email və ya şifrə yanlışdır'}), 401
 
-    # user_doc.id bizə Firebase-in avtomatik yaratdığı unikal string ID-ni verir
     token = jwt.encode({
         'user_id': user_doc.id,
         'role': user_data.get('role', 'student'),
@@ -187,12 +202,10 @@ def get_my_tickets(current_user):
     for doc in docs:
         t_data = doc.to_dict()
         t_data['id'] = doc.id
-        # Tarixi string-ə çeviririk (əgər mövcuddursa)
         if 'created_at' in t_data and t_data['created_at']:
             t_data['created_at'] = t_data['created_at'].strftime('%Y-%m-%d %H:%M:%S')
         tickets.append(t_data)
         
-    # Python-da tarixə görə sıralayırıq (ən yenilər yuxarıda)
     tickets.sort(key=lambda x: x.get('created_at', ''), reverse=True)
     return jsonify(tickets), 200
 
@@ -204,13 +217,12 @@ def get_all_tickets(current_user):
     docs = db.collection('tickets').order_by('created_at', direction=firestore.Query.DESCENDING).stream()
     
     formatted_tickets = []
-    users_cache = {} # Daha sürətli işləməsi üçün istifadəçiləri keşləyirik
+    users_cache = {} 
 
     for doc in docs:
         t_data = doc.to_dict()
         user_id = t_data.get('user_id')
         
-        # JOIN əməliyyatı NoSQL-də olmadığı üçün istifadəçini ayrıca çəkirik
         student_info = {"fullname": "Bilinmir", "email": "Bilinmir"}
         if user_id:
             if user_id not in users_cache:
@@ -237,7 +249,6 @@ def get_all_tickets(current_user):
     return jsonify(formatted_tickets), 200
 
 # 4. Şikayətin statusunu dəyişmək (Yalnız Admin üçün)
-# DİQQƏT: <int:ticket_id> əvəzinə <ticket_id> yazdıq, çünki Firestore id-ləri mətndir
 @app.route('/api/tickets/<ticket_id>', methods=['PUT'])
 @admin_required
 def update_ticket_status(current_user, ticket_id):
@@ -252,7 +263,6 @@ def update_ticket_status(current_user, ticket_id):
     if not ticket_ref.get().exists:
         return jsonify({'error': 'Şikayət tapılmadı'}), 404
 
-    # Statusu yeniləyirik
     ticket_ref.update({'status': new_status})
     return jsonify({'message': 'Status uğurla yeniləndi'}), 200
 
@@ -260,7 +270,7 @@ def update_ticket_status(current_user, ticket_id):
 # 🏢 XİDMƏT KATALOQU (SERVICES) API-ləri
 # ==========================================
 
-# Bütün xidmətləri gətirmək (Hər kəs görə bilər)
+# 1. Bütün xidmətləri gətirmək (Hər kəs görə bilər)
 @app.route('/api/services', methods=['GET'])
 def get_services():
     docs = db.collection('services').stream()
@@ -274,6 +284,40 @@ def get_services():
         services.append(s_data)
         
     return jsonify(services), 200
+
+# 2. Yeni xidmət əlavə etmək (Yalnız Admin üçün) - FİREBASE VERSIYASI
+@app.route('/api/services', methods=['POST'])
+@admin_required
+def create_service(current_user):
+    data = request.get_json()
+    name = data.get('name')
+    description = data.get('description')
+
+    if not name or not description:
+        return jsonify({'error': 'Xidmət adı və təsviri daxil edilməlidir'}), 400
+
+    new_service_ref = db.collection('services').document()
+    new_service_ref.set({
+        'name': name,
+        'description': description,
+        'created_at': firestore.SERVER_TIMESTAMP
+    })
+
+    return jsonify({'message': 'Xidmət uğurla yaradıldı', 'id': new_service_ref.id}), 201
+
+# 3. Xidməti silmək (Yalnız Admin üçün) - FİREBASE VERSIYASI
+# Diqqət: id Firebase-də string olduğu üçün <int:service_id> əvəzinə <service_id> oldu
+@app.route('/api/services/<service_id>', methods=['DELETE'])
+@admin_required
+def delete_service(current_user, service_id):
+    service_ref = db.collection('services').document(service_id)
+    
+    if not service_ref.get().exists:
+        return jsonify({'error': 'Xidmət tapılmadı'}), 404
+
+    service_ref.delete()
+    return jsonify({'message': 'Xidmət uğurla silindi'}), 200
+
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

@@ -2,8 +2,8 @@
   "openapi": "3.0.0",
   "info": {
     "title": "COMPATH API Documentation",
-    "description": "COMPATH layihəsi üçün Auth və Tickets CRUD API sənədləşdirilməsi",
-    "version": "1.1.0"
+    "description": "COMPATH layihəsi üçün Auth, Tickets və Services API sənədləşdirilməsi",
+    "version": "1.2.0"
   },
   "components": {
     "securitySchemes": {
@@ -17,6 +17,7 @@
   "paths": {
     "/api/login": {
       "post": {
+        "tags": ["Auth"],
         "summary": "İstifadəçi girişi (Login)",
         "requestBody": {
           "required": true,
@@ -42,6 +43,7 @@
     },
     "/api/signup": {
       "post": {
+        "tags": ["Auth"],
         "summary": "Yeni istifadəçi qeydiyyatı (Signup)",
         "requestBody": {
           "required": true,
@@ -68,6 +70,7 @@
     },
     "/api/tickets": {
       "post": {
+        "tags": ["Tickets"],
         "summary": "Yeni şikayət yaratmaq (Create)",
         "security": [
           { "BearerAuth": [] }
@@ -95,7 +98,8 @@
         }
       },
       "get": {
-        "summary": "İstifadəçinin şikayətlərinə baxması (Read)",
+        "tags": ["Tickets"],
+        "summary": "İstifadəçinin öz şikayətlərinə baxması (Read)",
         "security": [
           { "BearerAuth": [] }
         ],
@@ -105,9 +109,24 @@
         }
       }
     },
+    "/api/tickets/all": {
+      "get": {
+        "tags": ["Tickets"],
+        "summary": "Bütün tələbələrin şikayətlərini gətir (Yalnız Admin)",
+        "security": [
+          { "BearerAuth": [] }
+        ],
+        "responses": {
+          "200": { "description": "Bütün şikayətlərin siyahısı uğurla gətirildi" },
+          "401": { "description": "Token yoxdur və ya etibarsızdır" },
+          "403": { "description": "İcazə rədd edildi! Bu əməliyyat yalnız Adminlər üçündür" }
+        }
+      }
+    },
     "/api/tickets/{ticket_id}": {
       "put": {
-        "summary": "Şikayətin statusunu yeniləmək (Update)",
+        "tags": ["Tickets"],
+        "summary": "Şikayətin statusunu yeniləmək (Yalnız Admin)",
         "security": [
           { "BearerAuth": [] }
         ],
@@ -137,11 +156,14 @@
         "responses": {
           "200": { "description": "Status uğurla yeniləndi" },
           "400": { "description": "Status parametri boşdur və ya çatışmır" },
+          "401": { "description": "Token yoxdur və ya etibarsızdır" },
+          "403": { "description": "İcazə rədd edildi! Bu əməliyyat yalnız Adminlər üçündür" },
           "404": { "description": "Bu ID-yə uyğun şikayət tapılmadı" }
         }
       },
       "delete": {
-        "summary": "Şikayəti silmək (Delete)",
+        "tags": ["Tickets"],
+        "summary": "Şikayəti silmək (Yalnız Admin)",
         "security": [
           { "BearerAuth": [] }
         ],
@@ -156,7 +178,70 @@
         ],
         "responses": {
           "200": { "description": "Şikayət uğurla silindi" },
+          "401": { "description": "Token yoxdur və ya etibarsızdır" },
+          "403": { "description": "İcazə rədd edildi! Bu əməliyyat yalnız Adminlər üçündür" },
           "404": { "description": "Bu ID-yə uyğun şikayət tapılmadı" }
+        }
+      }
+    },
+    "/api/services": {
+      "get": {
+        "tags": ["Services"],
+        "summary": "Xidmətlərin siyahısını gətir (Hər kəs üçün)",
+        "responses": {
+          "200": { "description": "Xidmətlərin siyahısı" }
+        }
+      },
+      "post": {
+        "tags": ["Services"],
+        "summary": "Yeni xidmət əlavə et (Yalnız Admin)",
+        "security": [
+          { "BearerAuth": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "example": "Akademik Arayış" },
+                  "description": { "type": "string", "example": "Təhsil haqqında rəsmi arayışın verilməsi" }
+                },
+                "required": ["name", "description"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Xidmət uğurla yaradıldı" },
+          "400": { "description": "Xidmət adı və təsviri daxil edilməlidir" },
+          "401": { "description": "Token yoxdur və ya etibarsızdır" },
+          "403": { "description": "İcazə rədd edildi! Bu əməliyyat yalnız Adminlər üçündür" }
+        }
+      }
+    },
+    "/api/services/{id}": {
+      "delete": {
+        "tags": ["Services"],
+        "summary": "Xidməti sil (Yalnız Admin)",
+        "security": [
+          { "BearerAuth": [] }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Silinəcək xidmətin ID-si",
+            "schema": { "type": "integer", "example": 1 }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Xidmət uğurla silindi" },
+          "401": { "description": "Token yoxdur və ya etibarsızdır" },
+          "403": { "description": "İcazə rədd edildi! Bu əməliyyat yalnız Adminlər üçündür" },
+          "404": { "description": "Xidmət tapılmadı" }
         }
       }
     }
