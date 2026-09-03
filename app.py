@@ -108,14 +108,12 @@ def signup():
 
     users_ref = db.collection('users')
     
-    # Emailin olub-olmadığını yoxlayırıq
     existing_users = users_ref.where('email', '==', email).limit(1).get()
     if len(existing_users) > 0:
         return jsonify({'error': 'Bu email artıq mövcuddur'}), 409
 
     hashed_password = generate_password_hash(password)
 
-    # Yeni istifadəçini əlavə edirik
     users_ref.add({
         'fullname': fullname,
         'email': email,
@@ -136,7 +134,6 @@ def login():
     if not email or not password:
         return jsonify({'error': 'Email və şifrə daxil edilməlidir'}), 400
 
-    # Firebase-dən istifadəçini email-ə görə tapırıq
     users = db.collection('users').where('email', '==', email).limit(1).get()
 
     if len(users) == 0:
@@ -168,7 +165,6 @@ def login():
 # 📋 ŞİKAYƏTLƏR (TICKETS) API-ləri
 # ==========================================
 
-# 1. Yeni şikayət yaratmaq (Tələbələr üçün)
 @app.route('/api/tickets', methods=['POST'])
 @token_required
 def create_ticket(current_user):
@@ -176,79 +172,100 @@ def create_ticket(current_user):
     title = data.get('title')
     description = data.get('description')
     department = data.get('department')
+    priority = data.get('priority', 'low')
 
     if not title or not description or not department:
         return jsonify({'error': 'Məlumatlar əskikdir'}), 400
 
-    db.collection('tickets').add({
-        'user_id': current_user['user_id'],
+    user_doc = db.collection('users').document(current_user['user_id']).get()
+    author_name = user_doc.to_dict().get('fullname', 'Tələbə') if user_doc.exists else 'Tələbə'
+
+    # Axtarış üçün sözləri kiçik hərflərlə massivə yığırıq
+    search_string = f"{title} {author_name}".lower()
+    search_terms = search_string.split()
+
+    ticket_ref = db.collection('tickets').document()
+    
+    ticket_data = {
+        'ticketId': ticket_ref.id,
+        'userId': current_user['user_id'],
+        'authorName': author_name,
         'title': title,
         'description': description,
         'department': department,
-        'status': 'Gözləmədə',
-        'created_at': firestore.SERVER_TIMESTAMP
-    })
+        'status': 'pending',
+        'priority': priority,
+        'createdAt': firestore.SERVER_TIMESTAMP,
+        'attachedFiles': [],
+        'searchTerms': search_terms
+    }
 
-    return jsonify({'message': 'Müraciət uğurla yaradıldı'}), 201
+    if department == 'Finance':
+        ticket_data['customFields'] = {
+            'documentType': data.get('documentType', ''),
+            'educationType': data.get('educationType', ''),
+            'finCode': data.get('finCode', '').upper()
+        }
 
-# 2. Tələbənin ÖZ şikayətlərinə baxması
+    ticket_ref.set(ticket_data)
+
+    return jsonify({'message': 'Müraciət uğurla yaradıldı', 'ticketId': ticket_ref.id}), 201
+
 @app.route('/api/tickets', methods=['GET'])
 @token_required
 def get_my_tickets(current_user):
-    tickets_ref = db.collection('tickets').where('user_id', '==', current_user['user_id'])
+    tickets_ref = db.collection('tickets').where('userId', '==', current_user['user_id'])
     docs = tickets_ref.stream()
     
     tickets = []
     for doc in docs:
         t_data = doc.to_dict()
         t_data['id'] = doc.id
-        if 'created_at' in t_data and t_data['created_at']:
-            t_data['created_at'] = t_data['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+        if 'createdAt' in t_data and t_data['createdAt']:
+            t_data['createdAt'] = t_data['createdAt'].strftime('%Y-%m-%d %H:%M:%S')
         tickets.append(t_data)
         
-    tickets.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+    tickets.sort(key=lambda x: x.get('createdAt', ''), reverse=True)
     return jsonify(tickets), 200
 
-# 3. BÜTÜN şikayətlərə baxmaq (Yalnız Admin üçün)
+# FİLTERLƏMƏ VƏ AXTARIŞ BURA ƏLAVƏ EDİLDİ
 @app.route('/api/tickets/all', methods=['GET'])
 @admin_required
 def get_all_tickets(current_user):
-    # Ən yeniləri birinci gətiririk
-    docs = db.collection('tickets').order_by('created_at', direction=firestore.Query.DESCENDING).stream()
+    # Frontend-dən gələn parametrləri oxuyuruq
+    status = request.args.get('status')
+    department = request.args.get('department')
+    search_query = request.args.get('search')
+    
+    query = db.collection('tickets')
+    
+    # Əgər status göndərilibsə və "Bütün statuslar" deyilsə, filterlə
+    if status and status != 'Bütün statuslar':
+        query = query.where('status', '==', status)
+        
+    # Əgər department göndərilibsə və "Bütün şöbələr" deyilsə, filterlə
+    if department and department != 'Bütün şöbələr':
+        query = query.where('department', '==', department)
+        
+    # Axtarış sözü (searchTerms) üzrə axtarış
+    if search_query:
+        query = query.where('searchTerms', 'array_contains', search_query.lower())
+
+    docs = query.stream()
     
     formatted_tickets = []
-    users_cache = {} 
-
     for doc in docs:
         t_data = doc.to_dict()
-        user_id = t_data.get('user_id')
+        t_data['id'] = doc.id
+        if 'createdAt' in t_data and t_data['createdAt']:
+            t_data['createdAt'] = t_data['createdAt'].strftime('%Y-%m-%d %H:%M:%S')
+        formatted_tickets.append(t_data)
         
-        student_info = {"fullname": "Bilinmir", "email": "Bilinmir"}
-        if user_id:
-            if user_id not in users_cache:
-                user_doc = db.collection('users').document(user_id).get()
-                if user_doc.exists:
-                    u_data = user_doc.to_dict()
-                    users_cache[user_id] = {
-                        "fullname": u_data.get('fullname', 'Bilinmir'),
-                        "email": u_data.get('email', 'Bilinmir')
-                    }
-            if user_id in users_cache:
-                student_info = users_cache[user_id]
-
-        formatted_tickets.append({
-            "id": doc.id,
-            "title": t_data.get('title'),
-            "description": t_data.get('description'),
-            "department": t_data.get('department'),
-            "status": t_data.get('status'),
-            "created_at": t_data.get('created_at').strftime('%Y-%m-%d %H:%M:%S') if t_data.get('created_at') else None,
-            "student": student_info
-        })
+    # Tarixə görə Python tərəfində sıralayırıq (Firestore composite index errorundan qaçmaq üçün)
+    formatted_tickets.sort(key=lambda x: x.get('createdAt', ''), reverse=True)
         
     return jsonify(formatted_tickets), 200
 
-# 4. Şikayətin statusunu dəyişmək (Yalnız Admin üçün)
 @app.route('/api/tickets/<ticket_id>', methods=['PUT'])
 @admin_required
 def update_ticket_status(current_user, ticket_id):
@@ -267,10 +284,55 @@ def update_ticket_status(current_user, ticket_id):
     return jsonify({'message': 'Status uğurla yeniləndi'}), 200
 
 # ==========================================
+# 💬 ÇAT (MESAJLAŞMA) API-ləri
+# ==========================================
+
+@app.route('/api/tickets/<ticket_id>/messages', methods=['POST'])
+@token_required
+def add_message(current_user, ticket_id):
+    data = request.get_json()
+    text = data.get('text')
+    
+    if not text:
+        return jsonify({'error': 'Mesaj mətni boş ola bilməz'}), 400
+        
+    ticket_ref = db.collection('tickets').document(ticket_id)
+    if not ticket_ref.get().exists:
+        return jsonify({'error': 'Şikayət tapılmadı'}), 404
+        
+    msg_ref = ticket_ref.collection('messages').document()
+    msg_ref.set({
+        'messageId': msg_ref.id,
+        'senderId': current_user['user_id'],
+        'senderRole': current_user.get('role', 'student'),
+        'text': text,
+        'timestamp': firestore.SERVER_TIMESTAMP
+    })
+    
+    return jsonify({'message': 'Mesaj uğurla göndərildi', 'messageId': msg_ref.id}), 201
+
+@app.route('/api/tickets/<ticket_id>/messages', methods=['GET'])
+@token_required
+def get_messages(current_user, ticket_id):
+    ticket_ref = db.collection('tickets').document(ticket_id)
+    if not ticket_ref.get().exists:
+        return jsonify({'error': 'Şikayət tapılmadı'}), 404
+        
+    docs = ticket_ref.collection('messages').order_by('timestamp', direction=firestore.Query.ASCENDING).stream()
+    
+    messages = []
+    for doc in docs:
+        m_data = doc.to_dict()
+        if 'timestamp' in m_data and m_data['timestamp']:
+            m_data['timestamp'] = m_data['timestamp'].strftime('%Y-%m-%d %H:%M:%S')
+        messages.append(m_data)
+        
+    return jsonify(messages), 200
+
+# ==========================================
 # 🏢 XİDMƏT KATALOQU (SERVICES) API-ləri
 # ==========================================
 
-# 1. Bütün xidmətləri gətirmək (Hər kəs görə bilər)
 @app.route('/api/services', methods=['GET'])
 def get_services():
     docs = db.collection('services').stream()
@@ -285,7 +347,6 @@ def get_services():
         
     return jsonify(services), 200
 
-# 2. Yeni xidmət əlavə etmək (Yalnız Admin üçün) - FİREBASE VERSIYASI
 @app.route('/api/services', methods=['POST'])
 @admin_required
 def create_service(current_user):
@@ -305,8 +366,6 @@ def create_service(current_user):
 
     return jsonify({'message': 'Xidmət uğurla yaradıldı', 'id': new_service_ref.id}), 201
 
-# 3. Xidməti silmək (Yalnız Admin üçün) - FİREBASE VERSIYASI
-# Diqqət: id Firebase-də string olduğu üçün <int:service_id> əvəzinə <service_id> oldu
 @app.route('/api/services/<service_id>', methods=['DELETE'])
 @admin_required
 def delete_service(current_user, service_id):
@@ -317,7 +376,6 @@ def delete_service(current_user, service_id):
 
     service_ref.delete()
     return jsonify({'message': 'Xidmət uğurla silindi'}), 200
-
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

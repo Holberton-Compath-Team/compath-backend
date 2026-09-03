@@ -84,7 +84,11 @@
                 "properties": {
                   "title": { "type": "string", "example": "Kompüter problemi" },
                   "description": { "type": "string", "example": "Laboratoriyada kompüter açılmır" },
-                  "department": { "type": "string", "example": "IT Dəstək" }
+                  "department": { "type": "string", "example": "IT Dəstək" },
+                  "priority": { "type": "string", "example": "high", "description": "Vaciblik dərəcəsi: low, medium, high, urgent" },
+                  "documentType": { "type": "string", "example": "Tələbə arayışı", "description": "Yalnız İnzibati-Maliyyə şöbəsi üçün" },
+                  "educationType": { "type": "string", "example": "Ödənişli", "description": "Yalnız İnzibati-Maliyyə şöbəsi üçün" },
+                  "finCode": { "type": "string", "example": "ABC1234", "description": "Yalnız İnzibati-Maliyyə şöbəsi üçün" }
                 },
                 "required": ["title", "description", "department"]
               }
@@ -116,6 +120,26 @@
         "security": [
           { "BearerAuth": [] }
         ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Statusa görə filtrləmə (məs: pending, resolved)"
+          },
+          {
+            "name": "department",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Şöbəyə görə filtrləmə (məs: Finance, IT)"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Başlıq və ya ad üzrə axtarış sözü"
+          }
+        ],
         "responses": {
           "200": { "description": "Bütün şikayətlərin siyahısı uğurla gətirildi" },
           "401": { "description": "Token yoxdur və ya etibarsızdır" },
@@ -136,7 +160,7 @@
             "in": "path",
             "required": true,
             "description": "Yenilənəcək şikayətin ID-si",
-            "schema": { "type": "integer", "example": 1 }
+            "schema": { "type": "string", "example": "a1b2c3d4e5f6" }
           }
         ],
         "requestBody": {
@@ -173,7 +197,7 @@
             "in": "path",
             "required": true,
             "description": "Silinəcək şikayətin ID-si",
-            "schema": { "type": "integer", "example": 1 }
+            "schema": { "type": "string", "example": "a1b2c3d4e5f6" }
           }
         ],
         "responses": {
@@ -181,6 +205,65 @@
           "401": { "description": "Token yoxdur və ya etibarsızdır" },
           "403": { "description": "İcazə rədd edildi! Bu əməliyyat yalnız Adminlər üçündür" },
           "404": { "description": "Bu ID-yə uyğun şikayət tapılmadı" }
+        }
+      }
+    },
+    "/api/tickets/{ticket_id}/messages": {
+      "post": {
+        "tags": ["Messages (Chat)"],
+        "summary": "Ticket daxilində yeni mesaj göndərmək",
+        "security": [
+          { "BearerAuth": [] }
+        ],
+        "parameters": [
+          {
+            "name": "ticket_id",
+            "in": "path",
+            "required": true,
+            "description": "Mesaj yazılacaq şikayətin ID-si",
+            "schema": { "type": "string", "example": "a1b2c3d4e5f6" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": { "type": "string", "example": "Sizin probleminiz həll olunmaq üzrədir." }
+                },
+                "required": ["text"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Mesaj uğurla göndərildi" },
+          "400": { "description": "Mesaj mətni boş ola bilməz" },
+          "401": { "description": "Token yoxdur və ya etibarsızdır" },
+          "404": { "description": "Şikayət tapılmadı" }
+        }
+      },
+      "get": {
+        "tags": ["Messages (Chat)"],
+        "summary": "Ticket daxilindəki bütün mesajları oxumaq",
+        "security": [
+          { "BearerAuth": [] }
+        ],
+        "parameters": [
+          {
+            "name": "ticket_id",
+            "in": "path",
+            "required": true,
+            "description": "Mesajları oxunacaq şikayətin ID-si",
+            "schema": { "type": "string", "example": "a1b2c3d4e5f6" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Mesajların tarixçəsi" },
+          "401": { "description": "Token yoxdur və ya etibarsızdır" },
+          "404": { "description": "Şikayət tapılmadı" }
         }
       }
     },
@@ -234,7 +317,7 @@
             "in": "path",
             "required": true,
             "description": "Silinəcək xidmətin ID-si",
-            "schema": { "type": "integer", "example": 1 }
+            "schema": { "type": "string", "example": "s1e2r3v4" }
           }
         ],
         "responses": {
