@@ -576,7 +576,14 @@ def get_messages(current_user, ticket_id):
 # ==========================================
 # 🏢 XİDMƏT KATALOQU (SERVICES) API-ləri
 # ==========================================
-
+@app.route('/', methods=['GET'])
+def index():
+    return jsonify({
+        "status": "online",
+        "message": "COMPATH Helpdesk API aktivdir ve isleyir!",
+        "docs": "/api/docs"
+    }), 200
+    
 @app.route('/api/services', methods=['GET'])
 def get_services():
     docs = db.collection('services').stream()
