@@ -1,116 +1,118 @@
-# Compath Backend API
+# 🎯 COMPATH Helpdesk — Backend API
 
-Bu repository Compath layihəsinin arxa uç (backend) API-ni özündə cəmləşdirir. Layihə **Python (Flask)** və **MySQL** istifadə edilərək yazılmışdır. Sistemə JWT əsaslı autentifikasiya və Rol (Admin/Student) idarəetməsi daxildir.
+**COMPATH Helpdesk** tələbə və istifadəçi müraciətlərinin (ticket), anonim şikayətlərin, xidmət kataloqunun və daxili mesajlaşmanın idarə edilməsi üçün hazırlanmış RESTful Backend API sistemidir.
 
-## 🛠 Texnologiyalar
-* **Dil:** Python 3.x
-* **Freymvörk:** Flask
-* **Verilənlər Bazası:** MySQL (Flask-MySQLdb)
-* **Təhlükəsizlik:** PyJWT (Token), Werkzeug (Şifrə heşləmə)
+🌐 **Canlı API (Base URL):** `https://compath-api.onrender.com`  
+📚 **Swagger Sənədləşməsi:** `https://compath-api.onrender.com/api/docs`
 
 ---
 
-## ⚙️ Lokal Quraşdırma (Frontend & Backend Komandası üçün)
+## 🛠️ Texnologiya Steki
 
-Layihəni öz kompüterinizdə işə salmaq üçün aşağıdakı addımları ardıcıl izləyin:
-
-### 1. Repository-ni klonlayın
-```bash
-git clone https://github.com/Holberton-Compath-Team/compath-backend.git
-cd compath-backend
-```
-
-### 2. Virtual Mühiti yaradın və aktivləşdirin
-* **Windows üçün:**
-```bash
-python -m venv venv
-venv\Scripts\activate
-```
-* **Mac/Linux üçün:**
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
-### 3. Asılılıqları (Dependencies) yükləyin
-*(Qeyd: Əgər `requirements.txt` yoxdursa, aşağıdakı paketləri yükləyin)*
-```bash
-pip install flask flask-cors flask-mysqldb pyjwt werkzeug python-dotenv
-```
-
-### 4. Mühit Dəyişənlərini (.env) hazırlayın
-Layihənin ana qovluğunda yeni bir `.env` faylı yaradın və içinə bunları əlavə edin:
-```env
-JWT_SECRET_KEY=CompathKey2026
-DB_HOST=localhost
-DB_USER=root
-DB_PASSWORD=
-DB_NAME=compath_db
-```
-
-### 5. Verilənlər Bazasını (MySQL) Quraşdırın
-XAMPP (və ya başqa MySQL serveri) işə salın, `compath_db` adlı baza yaradın və aşağıdakı SQL kodlarını icra edin:
-
-```sql
--- İstifadəçilər Cədvəli
-CREATE TABLE users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    fullname VARCHAR(255) NOT NULL,
-    email VARCHAR(255) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL,
-    role VARCHAR(50) DEFAULT 'student'
-);
-
--- Şikayətlər (Tickets) Cədvəli
-CREATE TABLE tickets (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    title VARCHAR(255) NOT NULL,
-    description TEXT NOT NULL,
-    department VARCHAR(100) NOT NULL,
-    status VARCHAR(50) DEFAULT 'Gözləmədə',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
--- Xidmət Kataloqu Cədvəli
-CREATE TABLE services (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-### 6. Serveri İşə Salın
-```bash
-python app.py
-```
-Server `[http://127.0.0.1:5000](http://127.0.0.1:5000)` ünvanında işləməyə başlayacaq.
+* **Dil & Freymvork:** Python 3, Flask
+* **Verilənlər Bazası:** Firebase Firestore (NoSQL)
+* **Autentifikasiya:** JWT (JSON Web Tokens) & Werkzeug Password Hashing
+* **Fayl Yaddaşı:** Daxili Statik Fayl Servisi (`/api/upload`)
+* **Sənədləşmə:** Swagger UI (`flask-swagger-ui`)
+* **Hosting:** Render
 
 ---
 
-## 🔑 Test Hesabları
-Frontend komandasının yönləndirmələri (Admin Panel) test edə bilməsi üçün hazır admin hesabı:
-* **Email:** `admin@compath.az`
-* **Şifrə:** `Admin123!`
-* **Rol:** `admin`
+## ✨ Əsas Xüsusiyyətlər
+
+* **Vahid Data Standartı (`camelCase`):** Bütün endpoint-lər (`createdAt`, `updatedAt`, `userId`, `authorName`, `trackingCode`, `attachedFiles`, `priority`) vahid `camelCase` formatında cavab qaytarır.
+* **Anonim Müraciət & İzləmə (Tracking):** Qeydiyyatsız istifadəçilər müraciət yarada bilər və sistem tərəfindən verilən unikal `CP-XXXXXX` kodu ilə müraciətin statusunu izləyə bilər.
+* **Prioritet İdarəetməsi:** `"Aşağı"`, `"Orta"`, `"Yüksək"`, `"Təcili"` prioritet səviyyələri (boş göndərildikdə avtomatik `"Orta"` təyin olunur).
+* **Kartsız/Birbaşa Fayl Yükləmə:** Xarici storage-dən asılı olmadan birbaşa `/api/upload` üzərindən şəkil və sənəd yükləmə imkanı.
 
 ---
 
-## 📡 Əsas API Endpoint-ləri
+## 📌 API Endpoint-ləri
 
-### Autentifikasiya
-* `POST /api/signup` - Yeni tələbə qeydiyyatı (Body: `fullname`, `email`, `password`)
-* `POST /api/login` - Sistemə giriş. Cavabda `token` və `user` (id, fullname, email, role) qaytarır.
+### 1. Autentifikasiya
+| Metod | Endpoint | Təsvir | Auth |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/signup` | Yeni istifadəçi qeydiyyatı (`fullname`, `email`, `password`) | Xeyr |
+| `POST` | `/api/login` | Sistemə giriş və JWT token əldə edilməsi | Xeyr |
 
-### Şikayətlər (Tickets)
-* `POST /api/tickets` - Yeni şikayət yaratmaq (Tələbə üçün)
-* `GET /api/tickets` - İstifadəçinin öz şikayətləri (Tələbə üçün)
-* `GET /api/tickets/all` - Bütün tələbələrin şikayətləri (Yalnız Admin)
-* `PUT /api/tickets/<id>` - Şikayətin statusunu dəyişmək (Yalnız Admin)
+### 2. Fayl Yükləmə (Upload)
+| Metod | Endpoint | Təsvir | Auth |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/upload` | `FormData` (`file` key-i) ilə fayl yükləyir və birbaşa URL qaytarır | Xeyr |
 
-### Xidmət Kataloqu (Services)
-* `GET /api/services` - Bütün xidmətlərin siyahısı (Hər kəs üçün)
-* `POST /api/services` - Yeni xidmət yaratmaq (Yalnız Admin)
-* `DELETE /api/services/<id>` - Xidməti silmək (Yalnız Admin)
+### 3. Müraciətlər (Tickets) & İzləmə
+| Metod | Endpoint | Təsvir | Auth |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/tickets` | Yeni müraciət yaratmaq (`title`, `description`, `department`, `priority`, `attachedFiles`) | Token |
+| `GET` | `/api/tickets` | İstifadəçinin öz müraciətlərini əldə etmək | Token |
+| `GET` | `/api/tickets/all` | Bütün müraciətləri gətirmək (Filter: `?status=`, `?department=`, `?priority=`, `?search=`) | Admin |
+| `GET` | `/api/tickets/<id>` | Tək müraciətin detallarını gətirmək | Token |
+| `PUT` | `/api/tickets/<id>` | Müraciətin `status` və ya `priority` dəyərini yeniləmək | Admin |
+| `POST` | `/api/tickets/anonymous` | Token olmadan anonim müraciət yaratmaq (Qaytarır: `trackingCode`) | Xeyr |
+| `GET` | `/api/track/<code>` | `CP-XXXXXX` izləmə kodu ilə müraciət detallarını və mesajlarını görmək | Xeyr |
+
+### 4. Çat / Mesajlaşma
+| Metod | Endpoint | Təsvir | Auth |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/tickets/<id>/messages` | Müraciət daxilinə yeni mesaj və ya fayl (`text`, `attachedFiles`) göndərmək | Token |
+| `GET` | `/api/tickets/<id>/messages` | Müraciətə aid bütün mesaj tarixçəsini əldə etmək | Token |
+
+### 5. Xidmət Kataloqu (Services)
+| Metod | Endpoint | Təsvir | Auth |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/services` | Mövcud xidmətlərin siyahısını əldə etmək | Xeyr |
+| `POST` | `/api/services` | Yeni xidmət əlavə etmək (`name`, `description`) | Admin |
+| `DELETE` | `/api/services/<id>` | Xidməti silmək | Admin |
+
+---
+
+## 📦 Nümunə Data Strukturu (Ticket)
+
+```json
+{
+  "id": "a1b2c3d4e5",
+  "ticketId": "a1b2c3d4e5",
+  "trackingCode": "CP-9F4A2C",
+  "userId": "u987654321",
+  "authorName": "Əli Məmmədov",
+  "authorEmail": "ali@example.com",
+  "title": "Təhsil haqqı arayışı",
+  "description": "Maliyyə şöbəsindən arayış almaq istəyirəm.",
+  "department": "Finance",
+  "category": "Finance",
+  "status": "pending",
+  "priority": "Orta",
+  "attachedFiles": [
+    "[https://compath-api.onrender.com/static/uploads/8f9d2a1b.pdf](https://compath-api.onrender.com/static/uploads/8f9d2a1b.pdf)"
+  ],
+  "customFields": {
+    "documentType": "Arayış",
+    "educationType": "Əyani",
+    "finCode": "7ABC123"
+  },
+  "createdAt": "2026-10-17 11:30:00",
+  "updatedAt": "2026-10-17 11:30:00"
+}
+```
+
+---
+
+## 🚀 Lokal Quraşdırma (Local Setup)
+
+1. Repozitoriyanı klonlayın:
+   ```bash
+   git clone <repo-url>
+   cd compath-api
+   ```
+2. Virtual mühit yaradın və paketləri yükləyin:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # Windows: venv\Scripts\activate
+   pip install -r requirements.txt
+   ```
+3. Firebase Admin SDK JSON faylını layihənin kök qovluğuna əlavə edin.
+4. Serveri işə salın:
+   ```bash
+   python app.py
+   ```
+   Server `http://localhost:5000` ünvanında işə düşəcək.
